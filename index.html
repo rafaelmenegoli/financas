@@ -191,7 +191,7 @@ function vMais(){
     h("div",{cls:"card"},h("h3",{textContent:"Backup"}),h("div",{cls:"mut",st:"margin-bottom:8px",textContent:"Copie o texto e cole no app Notas. Para restaurar, cole aqui e toque em Restaurar."}),ta,
       h("button",{cls:"btn",textContent:"Copiar backup",on:{click:async()=>{try{await navigator.clipboard.writeText(ta.value)}catch(e){ta.select();document.execCommand("copy")}msg.textContent="Copiado."}}}),
       h("button",{cls:"btn sec",st:"margin-top:8px",textContent:"Copiar lançamentos (CSV p/ planilha)",on:{click:async()=>{await cp("data;tipo;categoria;descricao;valor\n"+[...S.tx].sort((a,b)=>a.d.localeCompare(b.d)).map(x=>[x.d,x.type==="in"?"entrada":"saida",x.c,(x.t||"").replace(/;/g,","),String(x.v).replace(".",",")].join(";")).join("\n"));msg.textContent="CSV copiado. Cole no Excel/Planilhas."}}}),h("button",{cls:"btn sec",st:"margin-top:8px",textContent:"Restaurar do texto acima",on:{click:e=>{try{const o=JSON.parse(ta.value);if(!Array.isArray(o.tx)||!Array.isArray(o.fx)||!Array.isArray(o.ins))throw 0;if(!a){a=true;e.target.textContent="Toque de novo: substitui tudo";return}S={tx:[],fx:[],ins:[],bud:{},goals:[],cfg:{},...o};save();theme();render()}catch(x){msg.textContent="Texto inválido.";a=false}}}}),msg),
-    h("div",{cls:"card"},h("div",{cls:"mut",textContent:all.length+" registros guardados neste aparelho · "+n+" lançamentos avulsos"}))];
+    h("div",{cls:"card"},h("div",{cls:"mut",textContent:all.length+" registros guardados neste aparelho · "+n+" lançamentos avulsos"+" · versão 3 (valores com vírgula)"}))];
 }
 
 
