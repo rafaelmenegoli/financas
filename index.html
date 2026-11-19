@@ -87,7 +87,7 @@ try{const r=JSON.parse(localStorage.getItem(KEY)||"null");if(r)S={...S,...r};els
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 const h=(t,p,...k)=>{const e=document.createElement(t);for(const a in p||{}){if(a==="on")for(const v in p.on)e.addEventListener(v,p.on[v]);else if(a==="cls")e.className=p[a];else if(a==="st")e.style.cssText=p[a];else e[a]=p[a]}k.flat().forEach(c=>c!=null&&e.append(c));return e};
 const brl=n=>S.cfg.hide?"R$ ••••":n.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-const num=s=>parseFloat(String(s).replace(",","."));
+const num=s=>{s=String(s).trim().replace(/[^\d.,-]/g,"");if(s.includes(","))s=s.replace(/\./g,"").replace(",",".");return parseFloat(s)};
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
 const T0=today(),Y0=T0.slice(0,7),D0=+T0.slice(8);
 const mn=m=>{const[y,mo]=m.split("-").map(Number);return y*12+mo-1};
@@ -99,7 +99,7 @@ const arm=fn=>{let a=false;const b=h("button",{cls:"x",textContent:"×",on:{clic
 const sel=(o,v)=>{const s=h("select");o.forEach(x=>s.append(h("option",{textContent:x})));if(v)s.value=v;return s};
 const cp=async t=>{try{await navigator.clipboard.writeText(t)}catch(e){const a=h("textarea");document.body.append(a);a.value=t;a.select();document.execCommand("copy");a.remove()}};
 let ed=null;const edit=(k,id)=>{ed={k,id};render();scrollTo(0,0)};
-const money=(ph)=>h("input",{type:"number",inputMode:"decimal",step:"0.01",placeholder:ph});
+const money=(ph)=>h("input",{type:"text",inputMode:"text",autocomplete:"off",placeholder:ph});
 
 function dues(m){
   const r=[];
