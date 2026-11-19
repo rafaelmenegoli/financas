@@ -100,7 +100,7 @@ const sel=(o,v)=>{const s=h("select");o.forEach(x=>s.append(h("option",{textCont
 const cp=async t=>{try{await navigator.clipboard.writeText(t)}catch(e){const a=h("textarea");document.body.append(a);a.value=t;a.select();document.execCommand("copy");a.remove()}};
 const lbl=t=>h("div",{cls:"mut",st:"margin:2px 0 4px",textContent:t});
 const cardSel=v=>{const s=h("select");[["","Sem cartão (Pix/débito/dinheiro)"],...S.cards.map(c=>[c,c])].forEach(([a,b])=>s.append(h("option",{value:a,textContent:b})));s.value=v||"";return s};
-let ed=null;const edit=(k,id)=>{ed={k,id};render();scrollTo(0,0)};
+let ed=null,openCard=null;const edit=(k,id)=>{ed={k,id};render();scrollTo(0,0)};
 const money=(ph)=>h("input",{type:"text",inputMode:"text",autocomplete:"off",placeholder:ph});
 
 function dues(m){
@@ -120,7 +120,24 @@ function tot(m){
 const nav=()=>h("div",{cls:"nav"},h("button",{textContent:"‹",on:{click:()=>{ym=addM(ym,-1);render()}}}),h("b",{textContent:mname(ym,{month:"long",year:"numeric"})}),h("button",{textContent:"›",on:{click:()=>{ym=addM(ym,1);render()}}}));
 const chip=(l,v)=>h("div",{cls:"chip"},h("span",{cls:"mut",textContent:l}),h("b",{textContent:brl(v)}));
 
-function cardsCard(T){const k=Object.entries(T.cd).filter(([c,v])=>v>0).sort((a,b)=>b[1]-a[1]);const c=h("div",{cls:"card"},h("h3",{textContent:"Por cartão / forma de pagamento"}));if(!k.length){c.append(h("div",{cls:"mut",textContent:"Sem gastos neste mês."}));return c}k.forEach(([n,v])=>c.append(h("div",{cls:"row"},h("span",{textContent:"💳 "+(n||"Sem cartão")}),h("b",{textContent:brl(v)})),h("div",{cls:"bar"},h("i",{st:"width:"+v/T.sai*100+"%"}))));c.append(h("div",{cls:"mut",textContent:"Soma das compras, contas fixas e parcelas do mês em cada cartão."}));return c}
+function cardsCard(T){
+  const y=ym.slice(0,4),yr=[...Array(12)].map((_,i)=>tot(y+"-"+String(i+1).padStart(2,"0")).cd);
+  const names=[...new Set([...S.cards,...Object.keys(T.cd)])].filter(n=>n||T.cd[""]>0);
+  const c=h("div",{cls:"card"},h("h3",{textContent:"Por cartão / forma de pagamento"}));
+  if(!names.length){c.append(h("div",{cls:"mut",textContent:"Nenhum cartão cadastrado."}));return c}
+  names.forEach(n=>{
+    const v=T.cd[n]||0,key=n||"∅",yv=yr.reduce((s,m)=>s+(m[n]||0),0),open=openCard===key;
+    const rest=S.ins.filter(i=>(i.card||"")===n).reduce((s,i)=>s+(i.n-Object.values(i.paid).filter(Boolean).length)*i.total/i.n,0);
+    c.append(h("div",{cls:"row",st:"cursor:pointer",on:{click:()=>{openCard=open?null:key;render()}}},h("span",{textContent:(open?"▾ ":"▸ ")+"💳 "+(n||"Sem cartão")}),h("b",{textContent:brl(v)})),
+      h("div",{cls:"bar"},h("i",{st:"width:"+(T.sai?v/T.sai*100:0)+"%"})),
+      h("div",{cls:"mut",st:"margin:-6px 0 10px",textContent:"Ano "+y+": "+brl(yv)+" · parcelas a pagar: "+brl(rest)}));
+    if(open){const L=[];
+      T.t.filter(x=>x.type!=="in"&&(x.card||"")===n).sort((a,b)=>b.d.localeCompare(a.d)).forEach(x=>L.push(h("div",{cls:"it",on:{click:()=>edit("tx",x.id)}},h("div",{},h("div",{textContent:x.t||x.c}),h("div",{cls:"mut",textContent:x.d.split("-").reverse().slice(0,2).join("/")+" · "+x.c})),h("b",{textContent:brl(x.v)}))));
+      T.d.filter(x=>x.type!=="in"&&(x.card||"")===n).forEach(x=>L.push(h("div",{cls:"it"+(x.paid?" done":""),on:{click:()=>edit(x.k,x.ref.id)}},h("div",{},h("div",{cls:"nm",textContent:x.name}),h("div",{cls:"mut",textContent:x.lbl+" · "+x.c})),h("b",{textContent:brl(x.v)}))));
+      c.append(h("div",{st:"background:var(--bg);border-radius:12px;padding:4px 12px;margin-bottom:10px"},L.length?L:h("div",{cls:"mut",st:"padding:8px 0",textContent:"Nada neste mês."})))}
+  });
+  c.append(h("div",{cls:"mut",textContent:"Toque no cartão para ver a fatura do mês. Os totais incluem o previsto (contas fixas e parcelas)."}));
+  return c}
 function vResumo(){
   const T=tot(ym),out=[];
   out.push(h("div",{cls:"card hero"},h("button",{cls:"eye",textContent:S.cfg.hide?"🙈":"👁",on:{click:()=>{S.cfg.hide=!S.cfg.hide;save();render()}}}),nav(),h("div",{cls:"mut",st:"text-align:center",textContent:"Saldo do mês"}),h("div",{cls:"big",textContent:brl(T.saldo)}),h("div",{cls:"chips"},chip("Entradas",T.ent),chip("Saídas",T.sai),chip("A pagar",T.ap))));
@@ -199,7 +216,7 @@ function vMais(){
     cardsMgr(),h("div",{cls:"card"},h("h3",{textContent:"Backup"}),h("div",{cls:"mut",st:"margin-bottom:8px",textContent:"Copie o texto e cole no app Notas. Para restaurar, cole aqui e toque em Restaurar."}),ta,
       h("button",{cls:"btn",textContent:"Copiar backup",on:{click:async()=>{try{await navigator.clipboard.writeText(ta.value)}catch(e){ta.select();document.execCommand("copy")}msg.textContent="Copiado."}}}),
       h("button",{cls:"btn sec",st:"margin-top:8px",textContent:"Copiar lançamentos (CSV p/ planilha)",on:{click:async()=>{await cp("data;tipo;categoria;descricao;valor\n"+[...S.tx].sort((a,b)=>a.d.localeCompare(b.d)).map(x=>[x.d,x.type==="in"?"entrada":"saida",x.c,(x.t||"").replace(/;/g,","),String(x.v).replace(".",",")].join(";")).join("\n"));msg.textContent="CSV copiado. Cole no Excel/Planilhas."}}}),h("button",{cls:"btn sec",st:"margin-top:8px",textContent:"Restaurar do texto acima",on:{click:e=>{try{const o=JSON.parse(ta.value);if(!Array.isArray(o.tx)||!Array.isArray(o.fx)||!Array.isArray(o.ins))throw 0;if(!a){a=true;e.target.textContent="Toque de novo: substitui tudo";return}S={tx:[],fx:[],ins:[],bud:{},goals:[],cfg:{},cards:["Nubank","Itaú"],...o};save();theme();render()}catch(x){msg.textContent="Texto inválido.";a=false}}}}),msg),
-    h("div",{cls:"card"},h("div",{cls:"mut",textContent:all.length+" registros guardados neste aparelho · "+n+" lançamentos avulsos"+" · versão 4 (cartões e parcelas)"}))];
+    h("div",{cls:"card"},h("div",{cls:"mut",textContent:all.length+" registros guardados neste aparelho · "+n+" lançamentos avulsos"+" · versão 5 (fatura e totais por cartão)"}))];
 }
 
 
