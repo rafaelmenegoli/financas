@@ -100,7 +100,8 @@ const sel=(o,v)=>{const s=h("select");o.forEach(x=>s.append(h("option",{textCont
 const cp=async t=>{try{await navigator.clipboard.writeText(t)}catch(e){const a=h("textarea");document.body.append(a);a.value=t;a.select();document.execCommand("copy");a.remove()}};
 const lbl=t=>h("div",{cls:"mut",st:"margin:2px 0 4px",textContent:t});
 const cardSel=v=>{const s=h("select");[["","Sem cartão (Pix/débito/dinheiro)"],...S.cards.map(c=>[c,c])].forEach(([a,b])=>s.append(h("option",{value:a,textContent:b})));s.value=v||"";return s};
-let ed=null,openCard=null;const edit=(k,id)=>{ed={k,id};render();scrollTo(0,0)};
+let ed=null,openCard=null;
+let pinMode=null,pinBuf="",pinTmp="",pinMsg="",pinAction=null,pinFrom=null,fails=0,until=0,away=0;const edit=(k,id)=>{ed={k,id};render();scrollTo(0,0)};
 const money=(ph)=>h("input",{type:"text",inputMode:"text",autocomplete:"off",placeholder:ph});
 
 function dues(m){
@@ -210,6 +211,37 @@ function vMetas(){
     h("details",{},h("summary",{textContent:"+ Novo cofrinho / investimento"}),gN,lbl("Onde está guardado"),gB,gT,gS,h("button",{cls:"btn",textContent:"Criar",on:{click:()=>{if(!gN.value.trim()){gN.focus();return}S.goals.push({id:Date.now(),name:gN.value.trim(),bank:gB.value,target:num(gT.value)||0,saved:num(gS.value)||0});save();render()}}})),
     h("div",{cls:"card"},nav(),h("h3",{textContent:"Orçamento por categoria"}),h("div",{cls:"mut",st:"margin-bottom:10px",textContent:"Defina um limite mensal. A barra fica amarela em 80% e vermelha ao estourar."}),b)];
 }
+
+const H=s=>{let a=0xdeadbeef,b=0x41c6ce57;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);a=Math.imul(a^c,2654435761);b=Math.imul(b^c,1597334677)}a=Math.imul(a^(a>>>16),2246822507)^Math.imul(b^(b>>>13),3266489909);b=Math.imul(b^(b>>>16),2246822507)^Math.imul(a^(a>>>13),3266489909);return(4294967296*(2097151&b)+(a>>>0)).toString(36)};
+const pinHash=p=>H((S.cfg.salt||"")+p+(S.cfg.salt||""));
+function press(d){
+  if(pinBuf.length>=4)return;pinBuf+=d;if(pinBuf.length<4){render();return}
+  const p=pinBuf;pinBuf="";pinMsg="";
+  if(pinMode==="new"){pinTmp=p;pinMode="confirm"}
+  else if(pinMode==="confirm"){if(p===pinTmp){S.cfg.salt=Math.random().toString(36).slice(2);S.cfg.pin=pinHash(p);S.cfg.pinSkip=false;save();pinMode=null}else{pinMsg="Os PINs não conferem. Tente de novo.";pinMode="new"}}
+  else{
+    if(Date.now()<until){pinMsg="Aguarde alguns segundos…"}
+    else if(pinHash(p)===S.cfg.pin){fails=0;if(pinMode==="check"&&pinAction==="change")pinMode="new";else if(pinMode==="check"){delete S.cfg.pin;save();pinMode=null}else pinMode=null}
+    else{fails++;pinMsg="PIN incorreto";if(fails>=5){until=Date.now()+30000;fails=0;pinMsg="Muitas tentativas. Aguarde 30s."}}
+  }
+  render();
+}
+function lockScreen(){
+  tabs.replaceChildren();
+  const T={enter:"Digite seu PIN",new:"Crie um PIN de 4 dígitos",confirm:"Repita o PIN",check:"Digite o PIN atual"};
+  const key=(l,fn)=>h("button",{cls:"btn sec",st:"font-size:22px;padding:16px",textContent:l,on:{click:fn}});
+  const dots=h("div",{st:"display:flex;gap:14px;justify-content:center;margin:18px 0"},[0,1,2,3].map(i=>h("i",{st:"width:16px;height:16px;border-radius:50%;border:2px solid var(--ac);background:"+(i<pinBuf.length?"var(--ac)":"transparent")})));
+  const grid=h("div",{st:"display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:300px;margin:0 auto"},[1,2,3,4,5,6,7,8,9].map(n=>key(String(n),()=>press(String(n)))),h("span"),key("0",()=>press("0")),key("⌫",()=>{pinBuf=pinBuf.slice(0,-1);render()}));
+  let ex=null;
+  if(pinMode==="enter"){let sure=false;ex=h("button",{cls:"btn sec",st:"margin-top:18px;font-size:13px;padding:8px;max-width:300px",textContent:"Esqueci o PIN",on:{click:e=>{if(!sure){sure=true;e.target.textContent="Isso APAGA todos os dados do app. Toque de novo para confirmar";return}try{localStorage.removeItem(KEY)}catch(x){}S={tx:[],fx:[],ins:[],bud:{},goals:[],cfg:{},cards:["Nubank","Itaú"]};save();pinMode="new";pinFrom=null;pinBuf="";render()}}})}
+  else ex=h("button",{cls:"btn sec",st:"margin-top:18px;font-size:13px;padding:8px;max-width:300px",textContent:pinFrom==="mais"?"Cancelar":"Agora não",on:{click:()=>{if(pinFrom!=="mais"){S.cfg.pinSkip=true;save()}pinMode=null;pinBuf="";pinMsg="";render()}}});
+  app.replaceChildren(h("div",{st:"padding-top:10vh;text-align:center"},h("div",{st:"font-size:40px",textContent:"🔒"}),h("h2",{textContent:T[pinMode]}),h("div",{cls:"mut",st:"min-height:20px",textContent:pinMsg}),dots,grid,ex));
+}
+function secCard(){
+  const go=(m,a,f)=>()=>{pinAction=a;pinFrom=f;pinMode=m;pinBuf="";pinMsg="";render()};
+  const b=(t,fn,c)=>h("button",{cls:"btn"+(c===undefined?" sec":""),st:"margin-top:8px",textContent:t,on:{click:fn}});
+  return h("div",{cls:"card"},h("h3",{textContent:"Segurança"}),h("div",{cls:"mut",textContent:S.cfg.pin?"PIN ativado. O app bloqueia depois de 30 segundos fora da tela.":"Sem PIN. Quem abrir o app no seu celular desbloqueado vê tudo."}),...(S.cfg.pin?[b("Bloquear agora",go("enter",null,"mais"),""),b("Alterar PIN",go("check","change","mais")),b("Remover PIN",go("check","remove","mais"))]:[b("Criar PIN",go("new",null,"mais"),"")]));
+}
 function cardsMgr(){const n=h("input",{placeholder:"Nome do cartão (ex.: Inter, C6)"}),l=h("div");S.cards.forEach(c=>l.append(h("div",{cls:"it"},h("div",{textContent:"💳 "+c}),arm(()=>{S.cards=S.cards.filter(z=>z!==c);save();render()}))));if(!S.cards.length)l.append(h("div",{cls:"mut",textContent:"Nenhum cartão cadastrado."}));return h("div",{cls:"card"},h("h3",{textContent:"Meus cartões"}),l,n,h("button",{cls:"btn",textContent:"Adicionar cartão",on:{click:()=>{const v=n.value.trim();if(!v||S.cards.includes(v))return n.focus();S.cards.push(v);save();render()}}}),h("div",{cls:"mut",st:"margin-top:8px",textContent:"Remover um cartão da lista não apaga os lançamentos já feitos com ele."}))}
 function vMais(){
   const ta=h("textarea",{value:JSON.stringify(S)}),msg=h("div",{cls:"mut"});let a=false;
@@ -217,10 +249,10 @@ function vMais(){
   th.onchange=()=>{S.cfg.theme={Claro:"light",Escuro:"dark"}[th.value]||"";save();theme()};
   const all=[...S.tx,...S.fx,...S.ins],n=S.tx.length;
   return[h("div",{cls:"card"},h("h3",{textContent:"Aparência"}),th,h("button",{cls:"btn sec",textContent:S.cfg.hide?"Mostrar valores":"Ocultar valores",on:{click:()=>{S.cfg.hide=!S.cfg.hide;save();render()}}})),
-    cardsMgr(),h("div",{cls:"card"},h("h3",{textContent:"Backup"}),h("div",{cls:"mut",st:"margin-bottom:8px",textContent:"Copie o texto e cole no app Notas. Para restaurar, cole aqui e toque em Restaurar."}),ta,
+    secCard(),cardsMgr(),h("div",{cls:"card"},h("h3",{textContent:"Backup"}),h("div",{cls:"mut",st:"margin-bottom:8px",textContent:"Copie o texto e cole no app Notas. Para restaurar, cole aqui e toque em Restaurar."}),ta,
       h("button",{cls:"btn",textContent:"Copiar backup",on:{click:async()=>{try{await navigator.clipboard.writeText(ta.value)}catch(e){ta.select();document.execCommand("copy")}msg.textContent="Copiado."}}}),
       h("button",{cls:"btn sec",st:"margin-top:8px",textContent:"Copiar lançamentos (CSV p/ planilha)",on:{click:async()=>{await cp("data;tipo;categoria;descricao;valor\n"+[...S.tx].sort((a,b)=>a.d.localeCompare(b.d)).map(x=>[x.d,x.type==="in"?"entrada":"saida",x.c,(x.t||"").replace(/;/g,","),String(x.v).replace(".",",")].join(";")).join("\n"));msg.textContent="CSV copiado. Cole no Excel/Planilhas."}}}),h("button",{cls:"btn sec",st:"margin-top:8px",textContent:"Restaurar do texto acima",on:{click:e=>{try{const o=JSON.parse(ta.value);if(!Array.isArray(o.tx)||!Array.isArray(o.fx)||!Array.isArray(o.ins))throw 0;if(!a){a=true;e.target.textContent="Toque de novo: substitui tudo";return}S={tx:[],fx:[],ins:[],bud:{},goals:[],cfg:{},cards:["Nubank","Itaú"],...o};save();theme();render()}catch(x){msg.textContent="Texto inválido.";a=false}}}}),msg),
-    h("div",{cls:"card"},h("div",{cls:"mut",textContent:all.length+" registros guardados neste aparelho · "+n+" lançamentos avulsos"+" · versão 6 (investimentos por banco)"}))];
+    h("div",{cls:"card"},h("div",{cls:"mut",textContent:all.length+" registros guardados neste aparelho · "+n+" lançamentos avulsos"+" · versão 7 (PIN de bloqueio)"}))];
 }
 
 
@@ -241,12 +273,15 @@ function editCard(){
 }
 
 function render(){
+  if(pinMode)return lockScreen();
   const V={resumo:vResumo,contas:vContas,lancar:vLancar,metas:vMetas,mais:vMais}[view]();
   if(ed)V.unshift(editCard());app.replaceChildren(...V.filter(Boolean));
   tabs.replaceChildren(...[["resumo","📊","Resumo"],["contas","🧾","Contas"],["lancar","➕","Lançar"],["metas","🎯","Metas"],["mais","⚙️","Mais"]].map(([k,i,l])=>h("button",{cls:view===k?"on":"",on:{click:()=>{view=k;ed=null;render();scrollTo(0,0)}}},h("span",{textContent:i}),l)));
 }
 const app=document.getElementById("app"),tabs=document.getElementById("tabs");
-theme();render();
+theme();pinMode=S.cfg.pin?"enter":(S.cfg.pinSkip?null:"new");
+document.addEventListener("visibilitychange",()=>{if(document.hidden)away=Date.now();else if(S.cfg.pin&&!pinMode&&away&&Date.now()-away>30000){pinMode="enter";pinBuf="";pinMsg="";render()}});
+render();
 if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
